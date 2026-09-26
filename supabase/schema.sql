@@ -6,6 +6,14 @@
 -- Authentication > Providers in the Supabase dashboard -- no keys needed).
 -- That gives each browser a stable auth.uid() to own an estimathon or a
 -- participant row, while the only thing a person types is a display name.
+--
+-- Row Level Security: only `questions` has it enabled. It's the only table
+-- holding anything that actually needs to stay secret (true_answer before
+-- reveal) -- estimathons/participants/guesses have no sensitive data, so
+-- RLS on them was pure friction with nothing to protect. Anyone with the
+-- public API key can read/write those three tables freely; that's fine for
+-- a join-code party game and avoids the class of RLS bugs that don't pay
+-- for themselves here.
 
 create extension if not exists "pgcrypto";
 
@@ -77,25 +85,20 @@ create or replace view public.questions_public as
 
 grant select on public.questions_public to authenticated;
 
+-- estimathons/participants/guesses: no RLS -- see note at the top of this
+-- file. Grant full CRUD to authenticated sessions explicitly (Supabase's
+-- default template grants usually already cover this, but be explicit).
+grant select, insert, update, delete on public.estimathons to authenticated;
+grant select, insert, update, delete on public.participants to authenticated;
+grant select, insert, update, delete on public.guesses to authenticated;
+
 -- ---------------------------------------------------------------------------
--- Row Level Security
+-- Row Level Security (questions only -- true_answer must stay hidden until
+-- the host reveals it; everything else is unrestricted, see note above)
 -- ---------------------------------------------------------------------------
 
-alter table public.estimathons enable row level security;
 alter table public.questions enable row level security;
-alter table public.participants enable row level security;
-alter table public.guesses enable row level security;
 
--- estimathons: any signed-in (anonymous) session can look one up by code;
--- only the host can create/modify their own.
-create policy "estimathons: read all" on public.estimathons
-  for select using (auth.uid() is not null);
-create policy "estimathons: insert own" on public.estimathons
-  for insert with check (host_id = auth.uid());
-create policy "estimathons: update own" on public.estimathons
-  for update using (host_id = auth.uid());
-
--- questions (base table): host-only. Everyone else must use questions_public.
 create policy "questions: host read" on public.questions
   for select using (
     exists (select 1 from public.estimathons e where e.id = estimathon_id and e.host_id = auth.uid())
@@ -107,80 +110,6 @@ create policy "questions: host insert" on public.questions
 create policy "questions: host update" on public.questions
   for update using (
     exists (select 1 from public.estimathons e where e.id = estimathon_id and e.host_id = auth.uid())
-  );
-
--- A policy on `participants` can't query `participants` directly in its own
--- USING clause -- Postgres re-evaluates the same policy for that subquery,
--- forever (error 42P17, infinite recursion). This SECURITY DEFINER function
--- runs as its owner, which bypasses RLS on the table it owns, so it reads
--- participants once instead of recursively re-triggering the policy below.
-create or replace function public.is_estimathon_participant(p_estimathon_id uuid)
-returns boolean
-language sql
-security definer
-set search_path = public
-stable
-as $$
-  select exists (
-    select 1 from public.participants p
-    where p.estimathon_id = p_estimathon_id and p.user_id = auth.uid()
-  );
-$$;
-
-grant execute on function public.is_estimathon_participant(uuid) to authenticated;
-
--- participants: visible to other participants and the host of the same
--- estimathon (needed for the leaderboard); a session adds itself once.
-create policy "participants: members read" on public.participants
-  for select using (
-    public.is_estimathon_participant(estimathon_id)
-    or exists (
-      select 1 from public.estimathons e
-      where e.id = participants.estimathon_id and e.host_id = auth.uid()
-    )
-  );
-create policy "participants: insert self" on public.participants
-  for insert with check (user_id = auth.uid());
--- Join.tsx upserts on (estimathon_id, user_id): rejoining the same
--- estimathon (refresh, retry, name change) hits this UPDATE path via
--- ON CONFLICT DO UPDATE, not the insert policy above.
-create policy "participants: update own" on public.participants
-  for update using (user_id = auth.uid())
-  with check (user_id = auth.uid());
-
--- guesses: you can always read your own; the host can always read all of
--- theirs (moderation); everyone else in the estimathon can only see a
--- question's guesses once that question is revealed, so nobody can peek at
--- rivals' ranges during a live round.
-create policy "guesses: read own, host, or revealed" on public.guesses
-  for select using (
-    exists (select 1 from public.participants p where p.id = participant_id and p.user_id = auth.uid())
-    or exists (select 1 from public.estimathons e where e.id = estimathon_id and e.host_id = auth.uid())
-    or (
-      exists (select 1 from public.questions q where q.id = question_id and q.revealed = true)
-      and exists (
-        select 1 from public.participants p2
-        where p2.estimathon_id = guesses.estimathon_id and p2.user_id = auth.uid()
-      )
-    )
-  );
-
-create policy "guesses: insert own" on public.guesses
-  for insert with check (
-    exists (select 1 from public.participants p where p.id = participant_id and p.user_id = auth.uid())
-    and exists (
-      select 1 from public.questions q
-      join public.estimathons e on e.id = q.estimathon_id
-      where q.id = question_id
-        and q.revealed = false
-        and q.order_index = e.current_question_index
-    )
-  );
-
-create policy "guesses: update own before reveal" on public.guesses
-  for update using (
-    exists (select 1 from public.participants p where p.id = participant_id and p.user_id = auth.uid())
-    and exists (select 1 from public.questions q where q.id = question_id and q.revealed = false)
   );
 
 -- ---------------------------------------------------------------------------
