@@ -131,6 +131,7 @@ create policy "questions: host delete" on public.questions
 -- Realtime
 -- ---------------------------------------------------------------------------
 
+alter publication supabase_realtime add table public.estimathons;
 alter publication supabase_realtime add table public.questions;
 alter publication supabase_realtime add table public.participants;
 alter publication supabase_realtime add table public.guesses;
