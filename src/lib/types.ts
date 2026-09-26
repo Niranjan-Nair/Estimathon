@@ -10,6 +10,7 @@ export interface Estimathon {
   current_question_index: number;
   scoring_strategy: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface QuestionPublic {

@@ -34,7 +34,16 @@ create table if not exists public.estimathons (
   -- publicly-readable data (see questions_public below), so no SQL branch
   -- is required here to add a strategy -- just register it in the TS module.
   scoring_strategy text not null default 'default',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Bumped on every host action (see src/pages/Host.tsx) so players get a
+  -- realtime signal to refetch questions_public/guesses even for changes
+  -- (like a reveal) that don't touch any other estimathons column. This
+  -- table is the realtime channel players actually receive: `questions`
+  -- has RLS restricting it to the host, and Realtime enforces RLS when
+  -- deciding who gets a broadcast, so a direct subscription to `questions`
+  -- would silently never reach players (and opening its RLS to players
+  -- would leak true_answer through the broadcast payload before reveal).
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.questions (

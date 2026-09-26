@@ -81,7 +81,7 @@ export default function Host() {
     setError(null);
     const { error: err } = await supabase
       .from("estimathons")
-      .update({ status: "active", current_question_index: 0 })
+      .update({ status: "active", current_question_index: 0, updated_at: new Date().toISOString() })
       .eq("id", estimathon.id);
     setBusy(false);
     if (err) setError(err.message);
@@ -89,15 +89,27 @@ export default function Host() {
   }
 
   async function revealCurrent() {
-    if (!currentQuestion) return;
+    if (!currentQuestion || !estimathon) return;
     setBusy(true);
     setError(null);
     const { error: err } = await supabase
       .from("questions")
       .update({ revealed: true, revealed_at: new Date().toISOString() })
       .eq("id", currentQuestion.id);
+    if (err) {
+      setBusy(false);
+      setError(err.message);
+      return;
+    }
+    // questions has RLS restricting it to the host, so a change there never
+    // reaches players via realtime (see schema.sql). Touch estimathons --
+    // players already get that live -- so they refetch and see the reveal.
+    const { error: touchErr } = await supabase
+      .from("estimathons")
+      .update({ updated_at: new Date().toISOString() })
+      .eq("id", estimathon.id);
     setBusy(false);
-    if (err) setError(err.message);
+    if (touchErr) setError(touchErr.message);
     else void load();
   }
 
@@ -112,6 +124,7 @@ export default function Host() {
       .update({
         current_question_index: nextIndex,
         status: isLast ? "finished" : "active",
+        updated_at: new Date().toISOString(),
       })
       .eq("id", estimathon.id);
     setBusy(false);
@@ -128,7 +141,7 @@ export default function Host() {
     setError(null);
     const { error: err } = await supabase
       .from("estimathons")
-      .update({ status: "finished" })
+      .update({ status: "finished", updated_at: new Date().toISOString() })
       .eq("id", estimathon.id);
     setBusy(false);
     if (err) setError(err.message);
@@ -166,7 +179,12 @@ export default function Host() {
 
       const { error: estErr } = await supabase
         .from("estimathons")
-        .update({ status: "draft", current_question_index: -1, join_code: generateJoinCode() })
+        .update({
+          status: "draft",
+          current_question_index: -1,
+          join_code: generateJoinCode(),
+          updated_at: new Date().toISOString(),
+        })
         .eq("id", estimathon.id);
       if (estErr) throw estErr;
 

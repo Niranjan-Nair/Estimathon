@@ -76,8 +76,19 @@ export default function Leaderboard({
     const channel = supabase
       .channel(`leaderboard-${estimathonId}`)
       .on(
+        // questions has RLS limiting it to the host, and Realtime enforces
+        // RLS when deciding who gets a broadcast -- so this listener only
+        // ever actually fires for the host viewing their own page.
+        // estimathons has no RLS and is bumped by every host action
+        // (including reveal, which otherwise touches nothing players can
+        // subscribe to), so that's the listener players actually rely on.
         "postgres_changes",
         { event: "*", schema: "public", table: "questions", filter: `estimathon_id=eq.${estimathonId}` },
+        () => void load(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "estimathons", filter: `id=eq.${estimathonId}` },
         () => void load(),
       )
       .on(
