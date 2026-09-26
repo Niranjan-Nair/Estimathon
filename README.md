@@ -50,7 +50,7 @@ values from **Settings > API**:
 | Key | Where it's used |
 | --- | --- |
 | `VITE_SUPABASE_URL` | Project URL |
-| `VITE_SUPABASE_ANON_KEY` | `anon` `public` API key |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Publishable API key (Supabase's newer name for the `anon` `public` key) |
 
 Copy `.env.example` to `.env.local` and fill them in for local dev.
 
@@ -79,7 +79,7 @@ npm run dev
 1. Push this repo to GitHub.
 2. In **Settings > Pages**, set Source to "GitHub Actions".
 3. In **Settings > Secrets and variables > Actions**, add repo secrets
-   `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (same values as
+   `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` (same values as
    `.env.local`) — the deploy workflow (`.github/workflows/deploy.yml`)
    bakes them into the static build.
 4. Push to `main`; the workflow builds and publishes `dist/` to Pages.
