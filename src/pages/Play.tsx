@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { getScoringStrategy } from "../lib/scoring";
-import { exponentOf, withUnit } from "../lib/format";
+import { formatExponent, formatMagnitudePreview, withUnit } from "../lib/format";
 import type { Estimathon, GuessRow, Participant, QuestionPublic } from "../lib/types";
 import Leaderboard from "../components/Leaderboard";
 
@@ -88,8 +88,8 @@ export default function Play() {
           setLow("");
           setHigh("");
         } else if (currentQuestion.use_magnitude) {
-          setLow(String(exponentOf(g.low)));
-          setHigh(String(exponentOf(g.high)));
+          setLow(formatExponent(g.low));
+          setHigh(formatExponent(g.high));
         } else {
           setLow(String(g.low));
           setHigh(String(g.high));
@@ -110,8 +110,8 @@ export default function Play() {
     if (currentQuestion.use_magnitude) {
       const minExponent = Number(low);
       const maxExponent = Number(high);
-      if (!Number.isInteger(minExponent) || !Number.isInteger(maxExponent) || maxExponent < minExponent) {
-        setError("Enter whole-number powers of 10, with the high exponent ≥ the low exponent.");
+      if (!Number.isFinite(minExponent) || !Number.isFinite(maxExponent) || maxExponent < minExponent) {
+        setError("Enter powers of 10, with the high exponent ≥ the low exponent.");
         return;
       }
       lowNum = 10 ** minExponent;
@@ -191,7 +191,7 @@ export default function Play() {
                 <div className="rounded-lg bg-base-raised px-4 py-3 text-sm text-white/70">
                   Your range:{" "}
                   {currentQuestion.use_magnitude
-                    ? `10^${exponentOf(myGuess.low)} – 10^${exponentOf(myGuess.high)}`
+                    ? `10^${formatExponent(myGuess.low)} – 10^${formatExponent(myGuess.high)}`
                     : withUnit(`${myGuess.low} – ${myGuess.high}`, currentQuestion.unit)}
                   {" · "}
                   {strategy.evaluateGuess(
@@ -208,26 +208,46 @@ export default function Play() {
           ) : (
             <form onSubmit={submitGuess} className="space-y-3">
               {currentQuestion.use_magnitude ? (
-                <div className="flex items-center gap-3">
-                  <span className="font-heading text-white/50">10^</span>
-                  <input
-                    className="input-field w-full"
-                    placeholder="Low exponent"
-                    type="number"
-                    step="1"
-                    value={low}
-                    onChange={(e) => setLow(e.target.value)}
-                  />
-                  <span className="text-white/40">to</span>
-                  <span className="font-heading text-white/50">10^</span>
-                  <input
-                    className="input-field w-full"
-                    placeholder="High exponent"
-                    type="number"
-                    step="1"
-                    value={high}
-                    onChange={(e) => setHigh(e.target.value)}
-                  />
+                <div className="flex items-start gap-3">
+                  <div className="w-full">
+                    <div className="flex items-center gap-2">
+                      <span className="font-heading text-white/50">10^</span>
+                      <input
+                        className="input-field w-full"
+                        placeholder="Low exponent"
+                        type="number"
+                        step="any"
+                        value={low}
+                        onChange={(e) => setLow(e.target.value)}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-white/40">
+                      {withUnit(
+                        formatMagnitudePreview(low.trim() === "" ? NaN : Number(low)) ?? "—",
+                        currentQuestion.unit,
+                      )}
+                    </p>
+                  </div>
+                  <span className="mt-2 text-white/40">to</span>
+                  <div className="w-full">
+                    <div className="flex items-center gap-2">
+                      <span className="font-heading text-white/50">10^</span>
+                      <input
+                        className="input-field w-full"
+                        placeholder="High exponent"
+                        type="number"
+                        step="any"
+                        value={high}
+                        onChange={(e) => setHigh(e.target.value)}
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-white/40">
+                      {withUnit(
+                        formatMagnitudePreview(high.trim() === "" ? NaN : Number(high)) ?? "—",
+                        currentQuestion.unit,
+                      )}
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <div className="flex gap-3">

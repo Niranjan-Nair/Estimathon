@@ -2,8 +2,16 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { withUnit } from "../lib/format";
+import { generateJoinCode } from "../lib/joinCode";
+import {
+  type DraftQuestion,
+  cleanDraftQuestions,
+  draftFromQuestion,
+  toQuestionRows,
+} from "../lib/draftQuestion";
 import type { Estimathon, QuestionHost } from "../lib/types";
 import Leaderboard from "../components/Leaderboard";
+import QuestionListEditor from "../components/QuestionListEditor";
 
 export default function Host() {
   const { id } = useParams<{ id: string }>();
@@ -12,6 +20,8 @@ export default function Host() {
   const [guessCount, setGuessCount] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingQuestions, setEditingQuestions] = useState(false);
+  const [draftQuestions, setDraftQuestions] = useState<DraftQuestion[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -109,6 +119,96 @@ export default function Host() {
     else void load();
   }
 
+  async function stopEstimathon() {
+    if (!estimathon) return;
+    if (!window.confirm("Stop this estimathon now? Players won't be able to submit any more guesses.")) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const { error: err } = await supabase
+      .from("estimathons")
+      .update({ status: "finished" })
+      .eq("id", estimathon.id);
+    setBusy(false);
+    if (err) setError(err.message);
+    else void load();
+  }
+
+  async function restartEstimathon() {
+    if (!estimathon) return;
+    if (
+      !window.confirm(
+        "Restart this estimathon? This clears every player, guess, and score, hides revealed " +
+          "answers again, and issues a new join code. The questions themselves are kept. This " +
+          "can't be undone.",
+      )
+    ) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const { error: guessErr } = await supabase.from("guesses").delete().eq("estimathon_id", estimathon.id);
+      if (guessErr) throw guessErr;
+
+      const { error: partErr } = await supabase
+        .from("participants")
+        .delete()
+        .eq("estimathon_id", estimathon.id);
+      if (partErr) throw partErr;
+
+      const { error: qErr } = await supabase
+        .from("questions")
+        .update({ revealed: false, revealed_at: null })
+        .eq("estimathon_id", estimathon.id);
+      if (qErr) throw qErr;
+
+      const { error: estErr } = await supabase
+        .from("estimathons")
+        .update({ status: "draft", current_question_index: -1, join_code: generateJoinCode() })
+        .eq("id", estimathon.id);
+      if (estErr) throw estErr;
+
+      void load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openQuestionEditor() {
+    setDraftQuestions(questions.map(draftFromQuestion));
+    setEditingQuestions(true);
+  }
+
+  async function saveQuestions() {
+    if (!estimathon) return;
+    const cleanQuestions = cleanDraftQuestions(draftQuestions);
+    if (cleanQuestions.length === 0) {
+      setError("Add at least one question with a numeric answer.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const { error: delErr } = await supabase.from("questions").delete().eq("estimathon_id", estimathon.id);
+      if (delErr) throw delErr;
+
+      const rows = toQuestionRows(estimathon.id, cleanQuestions);
+      const { error: insErr } = await supabase.from("questions").insert(rows);
+      if (insErr) throw insErr;
+
+      setEditingQuestions(false);
+      void load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!estimathon) return <p className="text-white/50">Loading...</p>;
 
   return (
@@ -125,10 +225,46 @@ export default function Host() {
 
       {error && <p className="text-sm text-accent-hover">{error}</p>}
 
-      {estimathon.status === "draft" && (
-        <button className="btn-primary" disabled={busy} onClick={() => void startEstimathon()}>
-          Start Estimathon
-        </button>
+      <div className="flex flex-wrap gap-3">
+        {estimathon.status === "draft" && (
+          <button className="btn-primary" disabled={busy} onClick={() => void startEstimathon()}>
+            Start Estimathon
+          </button>
+        )}
+        {estimathon.status === "draft" && !editingQuestions && (
+          <button className="btn-secondary" disabled={busy} onClick={openQuestionEditor}>
+            Edit Questions
+          </button>
+        )}
+        {estimathon.status === "active" && (
+          <button className="btn-secondary" disabled={busy} onClick={() => void stopEstimathon()}>
+            Stop Estimathon
+          </button>
+        )}
+        {estimathon.status !== "draft" && (
+          <button className="btn-secondary" disabled={busy} onClick={() => void restartEstimathon()}>
+            Restart Estimathon
+          </button>
+        )}
+      </div>
+
+      {editingQuestions && (
+        <div className="card space-y-4 p-4">
+          <QuestionListEditor questions={draftQuestions} onChange={setDraftQuestions} />
+          <div className="flex gap-3">
+            <button className="btn-primary" disabled={busy} onClick={() => void saveQuestions()}>
+              Save Questions
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={busy}
+              onClick={() => setEditingQuestions(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       )}
 
       {estimathon.status !== "draft" && currentQuestion && (
@@ -177,27 +313,29 @@ export default function Host() {
 
       <Leaderboard estimathonId={estimathon.id} scoringStrategy={estimathon.scoring_strategy} />
 
-      <div>
-        <h2 className="font-heading mb-2 text-lg text-white/70">All questions</h2>
-        <ol className="space-y-1">
-          {questions.map((q) => (
-            <li
-              key={q.id}
-              className={
-                "card flex items-center justify-between px-3 py-2 text-sm " +
-                (q.order_index === estimathon.current_question_index ? "border-accent" : "")
-              }
-            >
-              <span className="text-white/80">
-                Q{q.order_index + 1}. {q.prompt}
-              </span>
-              <span className="text-white/40">
-                {q.revealed ? `= ${withUnit(q.true_answer, q.unit)}` : "hidden"}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </div>
+      {!editingQuestions && (
+        <div>
+          <h2 className="font-heading mb-2 text-lg text-white/70">All questions</h2>
+          <ol className="space-y-1">
+            {questions.map((q) => (
+              <li
+                key={q.id}
+                className={
+                  "card flex items-center justify-between px-3 py-2 text-sm " +
+                  (q.order_index === estimathon.current_question_index ? "border-accent" : "")
+                }
+              >
+                <span className="text-white/80">
+                  Q{q.order_index + 1}. {q.prompt}
+                </span>
+                <span className="text-white/40">
+                  {q.revealed ? `= ${withUnit(q.true_answer, q.unit)}` : "hidden"}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
     </div>
   );
 }

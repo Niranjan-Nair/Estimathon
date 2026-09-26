@@ -84,10 +84,14 @@ create table if not exists public.guesses (
 -- Public view of questions that never exposes true_answer before reveal.
 -- Views run with their owner's privileges, so this reads the base table
 -- (host-only via RLS below) even though it's granted to every player.
+-- New columns must be appended after true_answer (not before): Postgres
+-- refuses `create or replace view` if it would rename/reorder an existing
+-- output column, so unit/use_magnitude go at the end.
 create or replace view public.questions_public as
   select
-    id, estimathon_id, order_index, prompt, revealed, revealed_at, unit, use_magnitude,
-    case when revealed then true_answer else null end as true_answer
+    id, estimathon_id, order_index, prompt, revealed, revealed_at,
+    case when revealed then true_answer else null end as true_answer,
+    unit, use_magnitude
   from public.questions;
 
 grant select on public.questions_public to authenticated;
@@ -116,6 +120,10 @@ create policy "questions: host insert" on public.questions
   );
 create policy "questions: host update" on public.questions
   for update using (
+    exists (select 1 from public.estimathons e where e.id = estimathon_id and e.host_id = auth.uid())
+  );
+create policy "questions: host delete" on public.questions
+  for delete using (
     exists (select 1 from public.estimathons e where e.id = estimathon_id and e.host_id = auth.uid())
   );
 
