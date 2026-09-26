@@ -37,12 +37,26 @@ export default function Join() {
         return;
       }
 
-      const { error: joinErr } = await supabase
+      // Avoid upsert()/ON CONFLICT here -- it interacts with RLS in ways
+      // that are hard to reason about. Explicit select-then-insert-or-update
+      // keeps each request under one simple, single-purpose policy check.
+      const { data: existing, error: existingErr } = await supabase
         .from("participants")
-        .upsert(
-          { estimathon_id: estimathon.id, user_id: user.id, display_name: cleanName },
-          { onConflict: "estimathon_id,user_id" },
-        );
+        .select("id")
+        .eq("estimathon_id", estimathon.id)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (existingErr) throw existingErr;
+
+      const { error: joinErr } = existing
+        ? await supabase
+            .from("participants")
+            .update({ display_name: cleanName })
+            .eq("id", existing.id)
+        : await supabase
+            .from("participants")
+            .insert({ estimathon_id: estimathon.id, user_id: user.id, display_name: cleanName });
 
       if (joinErr) {
         if (joinErr.code === "23505") {
