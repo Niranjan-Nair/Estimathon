@@ -37,12 +37,6 @@ export default function Join() {
         return;
       }
 
-      // TEMPORARY DEBUG: confirm what auth.uid() resolves to for this exact
-      // request, straight from Postgres, vs. what the client thinks it is.
-      const whoami = await supabase.rpc("debug_whoami");
-      // eslint-disable-next-line no-console
-      console.log("[debug] client user.id:", user.id, "| server auth.uid():", whoami.data, whoami.error);
-
       // Avoid upsert()/ON CONFLICT here -- it interacts with RLS in ways
       // that are hard to reason about. Explicit select-then-insert-or-update
       // keeps each request under one simple, single-purpose policy check.
@@ -65,8 +59,6 @@ export default function Join() {
             .insert({ estimathon_id: estimathon.id, user_id: user.id, display_name: cleanName });
 
       if (joinErr) {
-        // eslint-disable-next-line no-console
-        console.log("[debug] join error:", JSON.stringify(joinErr), "existing row:", existing);
         if (joinErr.code === "23505") {
           setError("That name is already taken in this estimathon. Try another.");
           return;
