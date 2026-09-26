@@ -22,7 +22,8 @@ Scoring is modular — see `src/lib/scoring/`. Each strategy implements
 adding a new file and registering it in `src/lib/scoring/index.ts`, then
 selecting its `key` as an estimathon's `scoring_strategy`.
 
-The default, **Jane Street's Estimathon rule**, is golf-style (lower is
+The default strategy (`src/lib/scoring/default.ts`), based on the format
+used at Jane Street's public Estimathon events, is golf-style (lower is
 better):
 
 ```

@@ -1,9 +1,10 @@
 import type { EvaluateOptions, Guess, QuestionResult, ScoringStrategy } from "./types";
 
-export const JANE_STREET_BASE = 10;
+export const DEFAULT_SCORING_BASE = 10;
 
 /**
- * Jane Street's Estimathon scoring rule.
+ * The default scoring rule, based on the format used at Jane Street's
+ * public Estimathon events.
  *
  * Teams submit a range [low, high] for each question. A guess is "correct"
  * if the true answer falls inside its range. The whole-game score is:
@@ -24,10 +25,10 @@ export const JANE_STREET_BASE = 10;
  * here. `options` is accepted for interface stability (a future strategy
  * might want to treat it differently) but this one ignores it.
  */
-export function createJaneStreetStrategy(base: number = JANE_STREET_BASE): ScoringStrategy {
+export function createDefaultStrategy(base: number = DEFAULT_SCORING_BASE): ScoringStrategy {
   return {
-    key: "jane_street",
-    label: "Jane Street",
+    key: "default",
+    label: "Default",
     description:
       "Score = 2^(questions − correct) × (10 + Σ ceil(high / low) over correct guesses). " +
       "Lower total score wins; every wrong or missing guess doubles your score.",
@@ -49,4 +50,4 @@ export function createJaneStreetStrategy(base: number = JANE_STREET_BASE): Scori
   };
 }
 
-export const janeStreetStrategy = createJaneStreetStrategy();
+export const defaultStrategy = createDefaultStrategy();

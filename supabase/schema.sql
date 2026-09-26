@@ -33,7 +33,7 @@ create table if not exists public.estimathons (
   -- leaderboard (see src/lib/scoring). Purely a client-side computation over
   -- publicly-readable data (see questions_public below), so no SQL branch
   -- is required here to add a strategy -- just register it in the TS module.
-  scoring_strategy text not null default 'jane_street',
+  scoring_strategy text not null default 'default',
   created_at timestamptz not null default now()
 );
 
