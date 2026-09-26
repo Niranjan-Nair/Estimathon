@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { getScoringStrategy } from "../lib/scoring";
-import { formatExponent, formatMagnitudePreview, withUnit } from "../lib/format";
+import { formatExponent, formatMagnitudePreview, formatTrueExponent, withUnit } from "../lib/format";
 import type { Estimathon, GuessRow, Participant, QuestionPublic } from "../lib/types";
 import Leaderboard from "../components/Leaderboard";
 
@@ -186,6 +186,11 @@ export default function Play() {
                 <span className="font-heading text-white">
                   {withUnit(currentQuestion.true_answer as number, currentQuestion.unit)}
                 </span>
+                {currentQuestion.use_magnitude && (
+                  <span className="ml-2 text-sm text-white/40">
+                    (10^{formatTrueExponent(currentQuestion.true_answer as number)})
+                  </span>
+                )}
               </div>
               {myGuess && (
                 <div className="rounded-lg bg-base-raised px-4 py-3 text-sm text-white/70">
@@ -250,7 +255,7 @@ export default function Play() {
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-3">
+                <div className="flex items-center gap-3">
                   <input
                     className="input-field w-full"
                     placeholder="Low"
@@ -259,6 +264,7 @@ export default function Play() {
                     value={low}
                     onChange={(e) => setLow(e.target.value)}
                   />
+                  <span className="text-white/40">to</span>
                   <input
                     className="input-field w-full"
                     placeholder="High"
@@ -267,6 +273,9 @@ export default function Play() {
                     value={high}
                     onChange={(e) => setHigh(e.target.value)}
                   />
+                  {currentQuestion.unit && (
+                    <span className="whitespace-nowrap text-white/50">{currentQuestion.unit}</span>
+                  )}
                 </div>
               )}
               {error && <p className="text-sm text-accent-hover">{error}</p>}

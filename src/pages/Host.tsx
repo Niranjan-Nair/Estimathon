@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { withUnit } from "../lib/format";
+import { formatTrueExponent, withUnit } from "../lib/format";
 import { generateJoinCode } from "../lib/joinCode";
 import {
   type DraftQuestion,
@@ -303,7 +303,7 @@ export default function Host() {
               </span>
               {currentQuestion.use_magnitude && (
                 <span className="ml-2 text-sm text-white/40">
-                  (10^{Math.floor(Math.log10(currentQuestion.true_answer))})
+                  (10^{formatTrueExponent(currentQuestion.true_answer)})
                 </span>
               )}
             </div>
@@ -347,7 +347,11 @@ export default function Host() {
                   Q{q.order_index + 1}. {q.prompt}
                 </span>
                 <span className="text-white/40">
-                  {q.revealed ? `= ${withUnit(q.true_answer, q.unit)}` : "hidden"}
+                  {q.revealed
+                    ? `= ${withUnit(q.true_answer, q.unit)}${
+                        q.use_magnitude ? ` (10^${formatTrueExponent(q.true_answer)})` : ""
+                      }`
+                    : "hidden"}
                 </span>
               </li>
             ))}
