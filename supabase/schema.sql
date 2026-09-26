@@ -141,6 +141,12 @@ create policy "participants: members read" on public.participants
   );
 create policy "participants: insert self" on public.participants
   for insert with check (user_id = auth.uid());
+-- Join.tsx upserts on (estimathon_id, user_id): rejoining the same
+-- estimathon (refresh, retry, name change) hits this UPDATE path via
+-- ON CONFLICT DO UPDATE, not the insert policy above.
+create policy "participants: update own" on public.participants
+  for update using (user_id = auth.uid())
+  with check (user_id = auth.uid());
 
 -- guesses: you can always read your own; the host can always read all of
 -- theirs (moderation); everyone else in the estimathon can only see a
