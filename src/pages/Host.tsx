@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import { withUnit } from "../lib/format";
 import type { Estimathon, QuestionHost } from "../lib/types";
 import Leaderboard from "../components/Leaderboard";
 
@@ -143,7 +144,14 @@ export default function Host() {
           {currentQuestion.revealed ? (
             <div className="mb-4 rounded-lg bg-base-raised px-4 py-3">
               <span className="text-white/60">True answer: </span>
-              <span className="font-heading text-white">{currentQuestion.true_answer}</span>
+              <span className="font-heading text-white">
+                {withUnit(currentQuestion.true_answer, currentQuestion.unit)}
+              </span>
+              {currentQuestion.use_magnitude && (
+                <span className="ml-2 text-sm text-white/40">
+                  (10^{Math.floor(Math.log10(currentQuestion.true_answer))})
+                </span>
+              )}
             </div>
           ) : (
             <button className="btn-primary" disabled={busy} onClick={() => void revealCurrent()}>
@@ -183,7 +191,9 @@ export default function Host() {
               <span className="text-white/80">
                 Q{q.order_index + 1}. {q.prompt}
               </span>
-              <span className="text-white/40">{q.revealed ? `= ${q.true_answer}` : "hidden"}</span>
+              <span className="text-white/40">
+                {q.revealed ? `= ${withUnit(q.true_answer, q.unit)}` : "hidden"}
+              </span>
             </li>
           ))}
         </ol>

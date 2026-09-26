@@ -8,6 +8,8 @@ import { DEFAULT_SCORING_STRATEGY, scoringStrategies } from "../lib/scoring";
 interface DraftQuestion {
   prompt: string;
   trueAnswer: string;
+  unit: string;
+  useMagnitude: boolean;
 }
 
 export default function CreateEstimathon() {
@@ -17,7 +19,7 @@ export default function CreateEstimathon() {
   const [hostName, setHostName] = useState("");
   const [strategy, setStrategy] = useState(DEFAULT_SCORING_STRATEGY);
   const [questions, setQuestions] = useState<DraftQuestion[]>([
-    { prompt: "", trueAnswer: "" },
+    { prompt: "", trueAnswer: "", unit: "", useMagnitude: false },
   ]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -27,7 +29,7 @@ export default function CreateEstimathon() {
   }
 
   function addQuestion() {
-    setQuestions((qs) => [...qs, { prompt: "", trueAnswer: "" }]);
+    setQuestions((qs) => [...qs, { prompt: "", trueAnswer: "", unit: "", useMagnitude: false }]);
   }
 
   function removeQuestion(index: number) {
@@ -42,7 +44,12 @@ export default function CreateEstimathon() {
     const cleanName = name.trim();
     const cleanHostName = hostName.trim();
     const cleanQuestions = questions
-      .map((q) => ({ prompt: q.prompt.trim(), trueAnswer: Number(q.trueAnswer) }))
+      .map((q) => ({
+        prompt: q.prompt.trim(),
+        trueAnswer: Number(q.trueAnswer),
+        unit: q.unit.trim(),
+        useMagnitude: q.useMagnitude,
+      }))
       .filter((q) => q.prompt.length > 0 && Number.isFinite(q.trueAnswer));
 
     if (!cleanName) {
@@ -81,6 +88,8 @@ export default function CreateEstimathon() {
         order_index: i,
         prompt: q.prompt,
         true_answer: q.trueAnswer,
+        unit: q.unit || null,
+        use_magnitude: q.useMagnitude,
       }));
       const { error: qErr } = await supabase.from("questions").insert(rows);
       if (qErr) throw qErr;
@@ -164,14 +173,31 @@ export default function CreateEstimathon() {
                   onChange={(e) => updateQuestion(i, { prompt: e.target.value })}
                   rows={2}
                 />
-                <input
-                  className="input-field w-full"
-                  placeholder="True answer (numeric)"
-                  type="number"
-                  step="any"
-                  value={q.trueAnswer}
-                  onChange={(e) => updateQuestion(i, { trueAnswer: e.target.value })}
-                />
+                <div className="flex gap-2">
+                  <input
+                    className="input-field w-full"
+                    placeholder="True answer (numeric)"
+                    type="number"
+                    step="any"
+                    value={q.trueAnswer}
+                    onChange={(e) => updateQuestion(i, { trueAnswer: e.target.value })}
+                  />
+                  <input
+                    className="input-field w-28"
+                    placeholder="Unit (optional)"
+                    value={q.unit}
+                    onChange={(e) => updateQuestion(i, { unit: e.target.value })}
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-xs text-white/50">
+                  <input
+                    type="checkbox"
+                    checked={q.useMagnitude}
+                    onChange={(e) => updateQuestion(i, { useMagnitude: e.target.checked })}
+                  />
+                  Order-of-magnitude guessing (players guess a range of powers of 10 instead of
+                  exact numbers)
+                </label>
               </div>
             ))}
           </div>

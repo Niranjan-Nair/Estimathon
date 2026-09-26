@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
 import { getScoringStrategy } from "../lib/scoring";
+import { exponentOf, withUnit } from "../lib/format";
 import type { Estimathon, GuessRow, Participant, QuestionPublic } from "../lib/types";
 import Leaderboard from "../components/Leaderboard";
 
@@ -83,8 +84,16 @@ export default function Play() {
         if (!mounted) return;
         const g = (data as GuessRow) ?? null;
         setMyGuess(g);
-        setLow(g ? String(g.low) : "");
-        setHigh(g ? String(g.high) : "");
+        if (!g) {
+          setLow("");
+          setHigh("");
+        } else if (currentQuestion.use_magnitude) {
+          setLow(String(exponentOf(g.low)));
+          setHigh(String(exponentOf(g.high)));
+        } else {
+          setLow(String(g.low));
+          setHigh(String(g.high));
+        }
       });
     return () => {
       mounted = false;
@@ -96,11 +105,24 @@ export default function Play() {
     if (!currentQuestion || !participant || !estimathon) return;
     setError(null);
 
-    const lowNum = Number(low);
-    const highNum = Number(high);
-    if (!Number.isFinite(lowNum) || !Number.isFinite(highNum) || lowNum <= 0 || highNum < lowNum) {
-      setError("Enter a valid range: low > 0 and high ≥ low.");
-      return;
+    let lowNum: number;
+    let highNum: number;
+    if (currentQuestion.use_magnitude) {
+      const minExponent = Number(low);
+      const maxExponent = Number(high);
+      if (!Number.isInteger(minExponent) || !Number.isInteger(maxExponent) || maxExponent < minExponent) {
+        setError("Enter whole-number powers of 10, with the high exponent ≥ the low exponent.");
+        return;
+      }
+      lowNum = 10 ** minExponent;
+      highNum = 10 ** maxExponent;
+    } else {
+      lowNum = Number(low);
+      highNum = Number(high);
+      if (!Number.isFinite(lowNum) || !Number.isFinite(highNum) || lowNum <= 0 || highNum < lowNum) {
+        setError("Enter a valid range: low > 0 and high ≥ low.");
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -161,15 +183,21 @@ export default function Play() {
             <div className="space-y-2">
               <div className="rounded-lg bg-base-raised px-4 py-3">
                 <span className="text-white/60">True answer: </span>
-                <span className="font-heading text-white">{currentQuestion.true_answer}</span>
+                <span className="font-heading text-white">
+                  {withUnit(currentQuestion.true_answer as number, currentQuestion.unit)}
+                </span>
               </div>
               {myGuess && (
                 <div className="rounded-lg bg-base-raised px-4 py-3 text-sm text-white/70">
-                  Your range: {myGuess.low} &ndash; {myGuess.high}
+                  Your range:{" "}
+                  {currentQuestion.use_magnitude
+                    ? `10^${exponentOf(myGuess.low)} – 10^${exponentOf(myGuess.high)}`
+                    : withUnit(`${myGuess.low} – ${myGuess.high}`, currentQuestion.unit)}
                   {" · "}
                   {strategy.evaluateGuess(
                     { low: myGuess.low, high: myGuess.high },
                     currentQuestion.true_answer as number,
+                    { magnitude: currentQuestion.use_magnitude },
                   ).correct
                     ? "Correct"
                     : "Missed"}
@@ -179,24 +207,48 @@ export default function Play() {
             </div>
           ) : (
             <form onSubmit={submitGuess} className="space-y-3">
-              <div className="flex gap-3">
-                <input
-                  className="input-field w-full"
-                  placeholder="Low"
-                  type="number"
-                  step="any"
-                  value={low}
-                  onChange={(e) => setLow(e.target.value)}
-                />
-                <input
-                  className="input-field w-full"
-                  placeholder="High"
-                  type="number"
-                  step="any"
-                  value={high}
-                  onChange={(e) => setHigh(e.target.value)}
-                />
-              </div>
+              {currentQuestion.use_magnitude ? (
+                <div className="flex items-center gap-3">
+                  <span className="font-heading text-white/50">10^</span>
+                  <input
+                    className="input-field w-full"
+                    placeholder="Low exponent"
+                    type="number"
+                    step="1"
+                    value={low}
+                    onChange={(e) => setLow(e.target.value)}
+                  />
+                  <span className="text-white/40">to</span>
+                  <span className="font-heading text-white/50">10^</span>
+                  <input
+                    className="input-field w-full"
+                    placeholder="High exponent"
+                    type="number"
+                    step="1"
+                    value={high}
+                    onChange={(e) => setHigh(e.target.value)}
+                  />
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <input
+                    className="input-field w-full"
+                    placeholder="Low"
+                    type="number"
+                    step="any"
+                    value={low}
+                    onChange={(e) => setLow(e.target.value)}
+                  />
+                  <input
+                    className="input-field w-full"
+                    placeholder="High"
+                    type="number"
+                    step="any"
+                    value={high}
+                    onChange={(e) => setHigh(e.target.value)}
+                  />
+                </div>
+              )}
               {error && <p className="text-sm text-accent-hover">{error}</p>}
               <button type="submit" className="btn-primary w-full" disabled={submitting}>
                 {myGuess ? "Update guess" : "Submit guess"}

@@ -3,6 +3,17 @@ export interface Guess {
   high: number;
 }
 
+/**
+ * Per-question evaluation options.
+ * - magnitude: when true, `guess.low`/`guess.high` are read as 10^exponent
+ *   (i.e. exact powers of ten) rather than raw bounds -- a guess is correct
+ *   if the true answer's order of magnitude falls between those exponents,
+ *   not if the true answer itself falls between the raw numbers.
+ */
+export interface EvaluateOptions {
+  magnitude?: boolean;
+}
+
 /** Per-question outcome for one participant, feeding into aggregate(). */
 export interface QuestionResult {
   correct: boolean;
@@ -21,7 +32,7 @@ export interface ScoringStrategy {
   key: string;
   label: string;
   description: string;
-  evaluateGuess(guess: Guess | null, trueAnswer: number): QuestionResult;
+  evaluateGuess(guess: Guess | null, trueAnswer: number, options?: EvaluateOptions): QuestionResult;
   /**
    * @param totalQuestions number of questions revealed so far (the
    *   leaderboard recomputes this after every reveal)

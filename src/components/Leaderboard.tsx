@@ -27,6 +27,7 @@ function buildLeaderboard(
         return strategy.evaluateGuess(
           guess ? { low: guess.low, high: guess.high } : null,
           q.true_answer as number,
+          { magnitude: q.use_magnitude },
         );
       });
       const total = totalRevealed > 0 ? strategy.aggregate(totalRevealed, results) : 0;

@@ -45,6 +45,13 @@ create table if not exists public.questions (
   true_answer numeric not null,
   revealed boolean not null default false,
   revealed_at timestamptz,
+  -- Optional unit suffix shown next to numbers for this question, e.g. "km", "people", "$".
+  unit text,
+  -- Optional alternate guessing mode: a guess is two integer powers of ten
+  -- (stored in guesses.low/high as 10^exponent -- see src/lib/scoring) and
+  -- is correct if the true answer's order of magnitude falls in that range,
+  -- rather than the true answer itself falling in a raw numeric range.
+  use_magnitude boolean not null default false,
   unique (estimathon_id, order_index)
 );
 
@@ -79,7 +86,7 @@ create table if not exists public.guesses (
 -- (host-only via RLS below) even though it's granted to every player.
 create or replace view public.questions_public as
   select
-    id, estimathon_id, order_index, prompt, revealed, revealed_at,
+    id, estimathon_id, order_index, prompt, revealed, revealed_at, unit, use_magnitude,
     case when revealed then true_answer else null end as true_answer
   from public.questions;
 

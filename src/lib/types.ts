@@ -20,6 +20,8 @@ export interface QuestionPublic {
   revealed: boolean;
   revealed_at: string | null;
   true_answer: number | null;
+  unit: string | null;
+  use_magnitude: boolean;
 }
 
 export interface QuestionHost extends QuestionPublic {
