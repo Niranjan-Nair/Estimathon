@@ -109,14 +109,31 @@ create policy "questions: host update" on public.questions
     exists (select 1 from public.estimathons e where e.id = estimathon_id and e.host_id = auth.uid())
   );
 
+-- A policy on `participants` can't query `participants` directly in its own
+-- USING clause -- Postgres re-evaluates the same policy for that subquery,
+-- forever (error 42P17, infinite recursion). This SECURITY DEFINER function
+-- runs as its owner, which bypasses RLS on the table it owns, so it reads
+-- participants once instead of recursively re-triggering the policy below.
+create or replace function public.is_estimathon_participant(p_estimathon_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1 from public.participants p
+    where p.estimathon_id = p_estimathon_id and p.user_id = auth.uid()
+  );
+$$;
+
+grant execute on function public.is_estimathon_participant(uuid) to authenticated;
+
 -- participants: visible to other participants and the host of the same
 -- estimathon (needed for the leaderboard); a session adds itself once.
 create policy "participants: members read" on public.participants
   for select using (
-    exists (
-      select 1 from public.participants p2
-      where p2.estimathon_id = participants.estimathon_id and p2.user_id = auth.uid()
-    )
+    public.is_estimathon_participant(estimathon_id)
     or exists (
       select 1 from public.estimathons e
       where e.id = participants.estimathon_id and e.host_id = auth.uid()
